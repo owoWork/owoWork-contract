@@ -8,8 +8,17 @@ pub const JOB: Symbol = symbol_short!("JOB");
 /// Storage key prefix for reputation records
 pub const REP: Symbol = symbol_short!("REP");
 
+/// Storage key prefix for user accounts
+pub const USER: Symbol = symbol_short!("USER");
+
 /// Dispute time-to-live in seconds (48 hours)
 pub const DISPUTE_TTL: u64 = 172_800;
+
+/// Maximum length for user name
+pub const MAX_NAME_LENGTH: u32 = 100;
+
+/// Maximum length for avatar URL
+pub const MAX_AVATAR_LENGTH: u32 = 500;
 
 /// Event symbols for contract events
 pub mod events {
@@ -20,6 +29,9 @@ pub mod events {
     pub const JOB_COMPLETED: (Symbol, Symbol) = (symbol_short!("completed"), symbol_short!("job"));
     pub const JOB_DISPUTED: (Symbol, Symbol) = (symbol_short!("disputed"), symbol_short!("job"));
     pub const JOB_RESOLVED: (Symbol, Symbol) = (symbol_short!("resolved"), symbol_short!("job"));
+    
+    pub const USER_REGISTERED: (Symbol, Symbol) = (symbol_short!("reg"), symbol_short!("user"));
+    pub const USER_UPDATED: (Symbol, Symbol) = (symbol_short!("updated"), symbol_short!("user"));
 }
 
 /// Error messages for contract validation
@@ -32,4 +44,10 @@ pub mod errors {
     pub const WRONG_ARTISAN: &str = "wrong artisan";
     pub const WRONG_CUSTOMER: &str = "wrong customer";
     pub const DISPUTE_WINDOW_NOT_ELAPSED: &str = "48h window not elapsed yet";
+    
+    pub const USER_EXISTS: &str = "user already registered";
+    pub const USER_NOT_FOUND: &str = "user not found";
+    pub const NAME_TOO_LONG: &str = "name exceeds maximum length";
+    pub const AVATAR_TOO_LONG: &str = "avatar URL exceeds maximum length";
+    pub const UNAUTHORIZED_UPDATE: &str = "only user can update their own profile";
 }

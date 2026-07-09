@@ -2,8 +2,8 @@
 
 use soroban_sdk::{Env, Address, String};
 
-use crate::constants::{JOB, REP};
-use crate::state::{Job, Reputation};
+use crate::constants::{JOB, REP, USER, MAX_NAME_LENGTH, MAX_AVATAR_LENGTH};
+use crate::state::{Job, Reputation, User};
 
 /// Job storage helper
 pub struct JobStorage<'a> {
@@ -74,5 +74,59 @@ impl<'a> ReputationStorage<'a> {
         let mut rep = self.get(artisan);
         rep.update(amount, success);
         self.save(artisan, &rep);
+    }
+}
+
+/// User storage helper
+pub struct UserStorage<'a> {
+    env: &'a Env,
+}
+
+impl<'a> UserStorage<'a> {
+    /// Creates a new UserStorage instance
+    pub fn new(env: &'a Env) -> Self {
+        UserStorage { env }
+    }
+
+    /// Gets a user by address
+    pub fn get(&self, address: &Address) -> Option<User> {
+        let key = (USER.clone(), address.clone());
+        self.env.storage().persistent().get(&key)
+    }
+
+    /// Gets a user by address, panics if not found
+    pub fn get_expect(&self, address: &Address) -> User {
+        self.get(address).expect("user not found")
+    }
+
+    /// Checks if a user exists
+    pub fn exists(&self, address: &Address) -> bool {
+        let key = (USER.clone(), address.clone());
+        self.env.storage().persistent().has(&key)
+    }
+
+    /// Saves a user
+    pub fn save(&self, user: &User) {
+        let key = (USER.clone(), user.address.clone());
+        self.env.storage().persistent().set(&key, user);
+    }
+
+    /// Deletes a user (for cleanup if needed)
+    pub fn delete(&self, address: &Address) {
+        let key = (USER.clone(), address.clone());
+        self.env.storage().persistent().remove(&key);
+    }
+
+    /// Validates user input parameters
+    pub fn validate_input(&self, name: &String, avatar: &String) -> Result<(), &'static str> {
+        if name.len() > MAX_NAME_LENGTH {
+            return Err("name exceeds maximum length");
+        }
+        
+        if avatar.len() > MAX_AVATAR_LENGTH {
+            return Err("avatar URL exceeds maximum length");
+        }
+        
+        Ok(())
     }
 }

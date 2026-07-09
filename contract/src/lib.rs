@@ -47,15 +47,194 @@ pub struct JobEscrow;
 /// Contract implementation with all public functions
 ///
 /// # Functions
-/// - `create_job`: Customer creates a job and locks payment
-/// - `accept_job`: Artisan accepts an open job
-/// - `confirm_done`: Customer confirms job completion
-/// - `raise_dispute`: Customer raises a dispute on active job
-/// - `resolve_dispute`: Mediator resolves dispute
-/// - `get_job`: Read job record
-/// - `get_reputation`: Read artisan reputation
+/// - User Management:
+///   - `register_user`: Register a new user account
+///   - `get_user`: Retrieve user profile information
+///   - `update_user`: Update user profile information
+///   - `deactivate_user`: Deactivate user account
+///   - `reactivate_user`: Reactivate user account
+///
+/// - Job Management:
+///   - `create_job`: Customer creates a job and locks payment
+///   - `accept_job`: Artisan accepts an open job
+///   - `confirm_done`: Customer confirms job completion
+///   - `raise_dispute`: Customer raises a dispute on active job
+///   - `resolve_dispute`: Mediator resolves dispute
+///   - `get_job`: Read job record
+///   - `get_reputation`: Read artisan reputation
 #[contractimpl]
 impl JobEscrow {
+    /// Registers a new user account
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `address`: User's wallet address (unique identifier)
+    /// - `name`: Display name for the user
+    /// - `avatar`: Avatar URL or hash
+    ///
+    /// # Returns
+    /// - User address that was registered
+    ///
+    /// # Panics
+    /// - If user already exists
+    /// - If name or avatar exceed maximum length
+    ///
+    /// # Authentication
+    /// - Requires user authentication (must match the address)
+    pub fn register_user(env: Env, address: Address, name: String, avatar: String) -> Address {
+        address.require_auth();
+
+        let user_storage = UserStorage::new(&env);
+
+        // Validate user doesn't already exist
+        if user_storage.exists(&address) {
+            panic!("{}", errors::USER_EXISTS);
+        }
+
+        // Validate input parameters
+        user_storage.validate_input(&name, &avatar)
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        // Create user record
+        let user = User::new(
+            address.clone(),
+            name,
+            avatar,
+            env.ledger().timestamp(),
+        );
+
+        // Save user
+        user_storage.save(&user);
+
+        // Emit registration event
+        env.events().publish(
+            (symbol_short!("reg"), symbol_short!("user")),
+            address.clone(),
+        );
+
+        address
+    }
+
+    /// Retrieves user profile information
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `address`: User's wallet address
+    ///
+    /// # Returns
+    /// - User profile information
+    ///
+    /// # Panics
+    /// - If user not found
+    pub fn get_user(env: Env, address: Address) -> User {
+        let user_storage = UserStorage::new(&env);
+        user_storage.get_expect(&address)
+    }
+
+    /// Updates user profile information
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `address`: User's wallet address
+    /// - `name`: New display name (optional)
+    /// - `avatar`: New avatar URL or hash (optional)
+    ///
+    /// # Panics
+    /// - If user not found
+    /// - If name or avatar exceed maximum length
+    /// - If caller is not the user
+    ///
+    /// # Authentication
+    /// - Requires user authentication (must match the address)
+    pub fn update_user(env: Env, address: Address, name: Option<String>, avatar: Option<String>) {
+        address.require_auth();
+
+        let user_storage = UserStorage::new(&env);
+        let mut user = user_storage.get_expect(&address);
+
+        // Validate input parameters if provided
+        if let Some(ref new_name) = name {
+            if let Some(ref new_avatar) = avatar {
+                user_storage.validate_input(new_name, new_avatar)
+                    .unwrap_or_else(|err| panic!("{}", err));
+            } else {
+                user_storage.validate_input(new_name, &user.avatar)
+                    .unwrap_or_else(|err| panic!("{}", err));
+            }
+        } else if let Some(ref new_avatar) = avatar {
+            user_storage.validate_input(&user.name, new_avatar)
+                .unwrap_or_else(|err| panic!("{}", err));
+        }
+
+        // Update user profile
+        user.update(name, avatar, env.ledger().timestamp());
+        user_storage.save(&user);
+
+        // Emit update event
+        env.events().publish(
+            (symbol_short!("updated"), symbol_short!("user")),
+            address,
+        );
+    }
+
+    /// Deactivates a user account
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `address`: User's wallet address
+    ///
+    /// # Panics
+    /// - If user not found
+    /// - If caller is not the user
+    ///
+    /// # Authentication
+    /// - Requires user authentication (must match the address)
+    pub fn deactivate_user(env: Env, address: Address) {
+        address.require_auth();
+
+        let user_storage = UserStorage::new(&env);
+        let mut user = user_storage.get_expect(&address);
+
+        // Deactivate user
+        user.deactivate(env.ledger().timestamp());
+        user_storage.save(&user);
+
+        // Emit update event
+        env.events().publish(
+            (symbol_short!("updated"), symbol_short!("user")),
+            address,
+        );
+    }
+
+    /// Reactivates a user account
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `address`: User's wallet address
+    ///
+    /// # Panics
+    /// - If user not found
+    /// - If caller is not the user
+    ///
+    /// # Authentication
+    /// - Requires user authentication (must match the address)
+    pub fn reactivate_user(env: Env, address: Address) {
+        address.require_auth();
+
+        let user_storage = UserStorage::new(&env);
+        let mut user = user_storage.get_expect(&address);
+
+        // Reactivate user
+        user.reactivate(env.ledger().timestamp());
+        user_storage.save(&user);
+
+        // Emit update event
+        env.events().publish(
+            (symbol_short!("updated"), symbol_short!("user")),
+            address,
+        );
+    }
+
     /// Creates a new job and stores escrow metadata
     ///
     /// # Arguments

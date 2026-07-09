@@ -81,3 +81,60 @@ impl Reputation {
         (self.completed as f64) / (total as f64)
     }
 }
+
+/// User account information
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct User {
+    /// Wallet address (unique identifier)
+    pub address: Address,
+    /// Display name
+    pub name: String,
+    /// Avatar URL or hash
+    pub avatar: String,
+    /// Account creation timestamp
+    pub created_at: u64,
+    /// Last update timestamp
+    pub updated_at: u64,
+    /// Whether the user is active
+    pub is_active: bool,
+}
+
+impl User {
+    /// Creates a new user account
+    pub fn new(address: Address, name: String, avatar: String, created_at: u64) -> Self {
+        User {
+            address,
+            name,
+            avatar,
+            created_at,
+            updated_at: created_at,
+            is_active: true,
+        }
+    }
+
+    /// Updates user profile information
+    pub fn update(&mut self, name: Option<String>, avatar: Option<String>, updated_at: u64) {
+        if let Some(new_name) = name {
+            self.name = new_name;
+        }
+        
+        if let Some(new_avatar) = avatar {
+            self.avatar = new_avatar;
+        }
+        
+        self.updated_at = updated_at;
+    }
+
+    /// Deactivates the user account
+    pub fn deactivate(&mut self, updated_at: u64) {
+        self.is_active = false;
+        self.updated_at = updated_at;
+    }
+
+    /// Reactivates the user account
+    pub fn reactivate(&mut self, updated_at: u64) {
+        self.is_active = true;
+        self.updated_at = updated_at;
+    }
+}
