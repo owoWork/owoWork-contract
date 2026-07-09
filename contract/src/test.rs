@@ -436,3 +436,352 @@ fn test_user_struct_methods() {
     assert!(user.is_active);
     assert_eq!(user.updated_at, updated_at + 2000);
 }
+#[test]
+fn test_create_task() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task
+    let title = String::from_str(&env, "Test Task");
+    let description = String::from_str(&env, "This is a test task description");
+    
+    let task_id = client.create_task(&creator, &title, &description);
+
+    // Verify task ID is 1 (first task)
+    assert_eq!(task_id, 1);
+
+    // Verify task was created
+    let task = client.get_task(&task_id);
+    assert_eq!(task.id, 1);
+    assert_eq!(task.creator, creator);
+    assert_eq!(task.title, title);
+    assert_eq!(task.description, description);
+    assert!(matches!(task.status, crate::state::TaskStatus::Pending));
+    assert_eq!(task.updated_at, task.created_at);
+}
+
+#[test]
+fn test_get_task() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task first
+    let title = String::from_str(&env, "Test Task");
+    let description = String::from_str(&env, "This is a test task description");
+    
+    let task_id = client.create_task(&creator, &title, &description);
+
+    // Retrieve task
+    let task = client.get_task(&task_id);
+    
+    assert_eq!(task.id, task_id);
+    assert_eq!(task.creator, creator);
+    assert_eq!(task.title, title);
+    assert_eq!(task.description, description);
+    assert!(matches!(task.status, crate::state::TaskStatus::Pending));
+}
+
+#[test]
+fn test_update_task() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task first
+    let initial_title = String::from_str(&env, "Initial Task");
+    let initial_description = String::from_str(&env, "Initial description");
+    
+    let task_id = client.create_task(&creator, &initial_title, &initial_description);
+
+    // Update task
+    let new_title = String::from_str(&env, "Updated Task");
+    let new_description = String::from_str(&env, "Updated description");
+    
+    client.update_task(&task_id, &creator, &Some(new_title.clone()), &Some(new_description.clone()));
+
+    // Retrieve updated task
+    let task = client.get_task(&task_id);
+    
+    assert_eq!(task.title, new_title);
+    assert_eq!(task.description, new_description);
+    // Note: In test environment, timestamps may not increment
+}
+
+#[test]
+fn test_update_task_partial() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task first
+    let initial_title = String::from_str(&env, "Initial Task");
+    let initial_description = String::from_str(&env, "Initial description");
+    
+    let task_id = client.create_task(&creator, &initial_title, &initial_description);
+
+    // Update only title
+    let new_title = String::from_str(&env, "Updated Task");
+    client.update_task(&task_id, &creator, &Some(new_title.clone()), &None);
+
+    let task1 = client.get_task(&task_id);
+    assert_eq!(task1.title, new_title);
+    assert_eq!(task1.description, initial_description);
+
+    // Update only description
+    let new_description = String::from_str(&env, "Updated description");
+    client.update_task(&task_id, &creator, &None, &Some(new_description.clone()));
+
+    let task2 = client.get_task(&task_id);
+    assert_eq!(task2.title, new_title);
+    assert_eq!(task2.description, new_description);
+}
+
+#[test]
+fn test_change_task_status() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task first
+    let title = String::from_str(&env, "Test Task");
+    let description = String::from_str(&env, "Test description");
+    
+    let task_id = client.create_task(&creator, &title, &description);
+
+    // Change status from Pending to InProgress
+    client.change_task_status(&task_id, &creator, &crate::state::TaskStatus::InProgress);
+    
+    let task1 = client.get_task(&task_id);
+    assert!(matches!(task1.status, crate::state::TaskStatus::InProgress));
+    // Note: In test environment, timestamps may not increment
+
+    // Change status from InProgress to Completed
+    client.change_task_status(&task_id, &creator, &crate::state::TaskStatus::Completed);
+    
+    let task2 = client.get_task(&task_id);
+    assert!(matches!(task2.status, crate::state::TaskStatus::Completed));
+    // Note: In test environment, timestamps may not increment
+}
+
+#[test]
+fn test_task_status_transition_cancelled() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task first
+    let title = String::from_str(&env, "Test Task");
+    let description = String::from_str(&env, "Test description");
+    
+    let task_id = client.create_task(&creator, &title, &description);
+
+    // Cancel task from Pending
+    client.change_task_status(&task_id, &creator, &crate::state::TaskStatus::Cancelled);
+    
+    let task1 = client.get_task(&task_id);
+    assert!(matches!(task1.status, crate::state::TaskStatus::Cancelled));
+
+    // Reopen cancelled task to Pending
+    client.change_task_status(&task_id, &creator, &crate::state::TaskStatus::Pending);
+    
+    let task2 = client.get_task(&task_id);
+    assert!(matches!(task2.status, crate::state::TaskStatus::Pending));
+}
+
+#[test]
+fn test_get_tasks() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create multiple tasks
+    let title1 = String::from_str(&env, "Task 1");
+    let description1 = String::from_str(&env, "Description 1");
+    client.create_task(&creator, &title1, &description1);
+    
+    let title2 = String::from_str(&env, "Task 2");
+    let description2 = String::from_str(&env, "Description 2");
+    client.create_task(&creator, &title2, &description2);
+    
+    let title3 = String::from_str(&env, "Task 3");
+    let description3 = String::from_str(&env, "Description 3");
+    client.create_task(&creator, &title3, &description3);
+
+    // Get all tasks
+    let tasks = client.get_tasks(&None);
+    
+    assert_eq!(tasks.len(), 3);
+    assert_eq!(tasks.get(0).unwrap().id, 1);
+    assert_eq!(tasks.get(1).unwrap().id, 2);
+    assert_eq!(tasks.get(2).unwrap().id, 3);
+}
+
+#[test]
+fn test_task_struct_methods() {
+    let env = Env::default();
+    
+    // Test Task struct methods
+    let address = Address::generate(&env);
+    let title = String::from_str(&env, "Test Task");
+    let description = String::from_str(&env, "Test description");
+    let created_at = 1234567890;
+    
+    let mut task = crate::state::Task::new(1, address.clone(), title.clone(), description.clone(), created_at);
+    
+    // Initial state
+    assert_eq!(task.id, 1);
+    assert_eq!(task.creator, address);
+    assert_eq!(task.title, title);
+    assert_eq!(task.description, description);
+    assert!(matches!(task.status, crate::state::TaskStatus::Pending));
+    assert_eq!(task.created_at, created_at);
+    assert_eq!(task.updated_at, created_at);
+    
+    // Update information
+    let new_title = String::from_str(&env, "Updated Task");
+    let new_description = String::from_str(&env, "Updated description");
+    let updated_at = created_at + 1000;
+    
+    task.update_info(Some(new_title.clone()), Some(new_description.clone()), updated_at);
+    
+    assert_eq!(task.title, new_title);
+    assert_eq!(task.description, new_description);
+    assert_eq!(task.updated_at, updated_at);
+    
+    // Test status transitions
+    assert!(task.can_transition_to(&crate::state::TaskStatus::InProgress));
+    assert!(task.can_transition_to(&crate::state::TaskStatus::Cancelled));
+    assert!(!task.can_transition_to(&crate::state::TaskStatus::Completed));
+    
+    // Change status to InProgress
+    let result = task.change_status(crate::state::TaskStatus::InProgress, updated_at + 1000);
+    assert!(result.is_ok());
+    assert!(matches!(task.status, crate::state::TaskStatus::InProgress));
+    assert_eq!(task.updated_at, updated_at + 1000);
+    
+    // Now can transition to Completed or Cancelled
+    assert!(task.can_transition_to(&crate::state::TaskStatus::Completed));
+    assert!(task.can_transition_to(&crate::state::TaskStatus::Cancelled));
+    assert!(!task.can_transition_to(&crate::state::TaskStatus::Pending));
+    
+    // Change status to Completed
+    let result = task.change_status(crate::state::TaskStatus::Completed, updated_at + 2000);
+    assert!(result.is_ok());
+    assert!(matches!(task.status, crate::state::TaskStatus::Completed));
+    assert_eq!(task.updated_at, updated_at + 2000);
+    
+    // Test invalid transition (Completed back to InProgress should fail)
+    assert!(!task.can_transition_to(&crate::state::TaskStatus::InProgress));
+    let result = task.change_status(crate::state::TaskStatus::InProgress, updated_at + 3000);
+    assert!(result.is_err());
+}
+
+#[test]
+#[should_panic(expected = "task title exceeds maximum length")]
+fn test_task_title_too_long() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Try to create task with title that's too long
+    let long_title = String::from_str(&env, &"a".repeat(250)); // Exceeds MAX_TITLE_LENGTH
+    let description = String::from_str(&env, "Test description");
+    
+    // This should panic
+    client.create_task(&creator, &long_title, &description);
+}
+
+#[test]
+#[should_panic(expected = "task description exceeds maximum length")]
+fn test_task_description_too_long() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Try to create task with description that's too long
+    let title = String::from_str(&env, "Test Task");
+    let long_description = String::from_str(&env, &"a".repeat(2500)); // Exceeds MAX_DESCRIPTION_LENGTH
+    
+    // This should panic
+    client.create_task(&creator, &title, &long_description);
+}
+
+#[test]
+#[should_panic(expected = "invalid status transition")]
+fn test_invalid_task_status_transition() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, JobEscrow);
+    let client = JobEscrowClient::new(&env, &contract_id);
+
+    // Create test address
+    let creator = Address::generate(&env);
+    
+    // Set authentication for creator
+    env.mock_all_auths();
+
+    // Create task first
+    let title = String::from_str(&env, "Test Task");
+    let description = String::from_str(&env, "Test description");
+    
+    let task_id = client.create_task(&creator, &title, &description);
+
+    // Try invalid transition (Pending -> Completed, skipping InProgress)
+    // This should panic
+    client.change_task_status(&task_id, &creator, &crate::state::TaskStatus::Completed);
+}

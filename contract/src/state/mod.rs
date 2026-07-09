@@ -138,3 +138,100 @@ impl User {
         self.updated_at = updated_at;
     }
 }
+
+/// Represents the status of a work item/task
+#[contracttype]
+#[derive(Clone, PartialEq, Debug)]
+pub enum TaskStatus {
+    /// Task created but not started
+    Pending,
+    /// Task is currently being worked on
+    InProgress,
+    /// Task completed successfully
+    Completed,
+    /// Task cancelled
+    Cancelled,
+}
+
+/// Work item/task record
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Task {
+    /// Unique task identifier (auto-incremented)
+    pub id: u64,
+    /// Address of the task creator
+    pub creator: Address,
+    /// Task title
+    pub title: String,
+    /// Task description
+    pub description: String,
+    /// Current task status
+    pub status: TaskStatus,
+    /// Timestamp when task was created
+    pub created_at: u64,
+    /// Timestamp when task was last updated
+    pub updated_at: u64,
+}
+
+impl Task {
+    /// Creates a new task
+    pub fn new(id: u64, creator: Address, title: String, description: String, created_at: u64) -> Self {
+        Task {
+            id,
+            creator,
+            title,
+            description,
+            status: TaskStatus::Pending,
+            created_at,
+            updated_at: created_at,
+        }
+    }
+
+    /// Updates task information (title and/or description)
+    pub fn update_info(&mut self, title: Option<String>, description: Option<String>, updated_at: u64) {
+        if let Some(new_title) = title {
+            self.title = new_title;
+        }
+        
+        if let Some(new_description) = description {
+            self.description = new_description;
+        }
+        
+        self.updated_at = updated_at;
+    }
+
+    /// Changes task status with validation
+    pub fn change_status(&mut self, new_status: TaskStatus, updated_at: u64) -> Result<(), &'static str> {
+        // Validate status transition
+        match (&self.status, &new_status) {
+            (TaskStatus::Pending, TaskStatus::InProgress) => {},
+            (TaskStatus::Pending, TaskStatus::Cancelled) => {},
+            (TaskStatus::InProgress, TaskStatus::Completed) => {},
+            (TaskStatus::InProgress, TaskStatus::Cancelled) => {},
+            (TaskStatus::Cancelled, TaskStatus::Pending) => {}, // Allow reopening cancelled tasks
+            (old, new) if old == new => {
+                // Same status is allowed (for timestamp updates)
+            },
+            _ => {
+                return Err("invalid status transition");
+            }
+        }
+        
+        self.status = new_status;
+        self.updated_at = updated_at;
+        Ok(())
+    }
+
+    /// Checks if the task can transition to a new status
+    pub fn can_transition_to(&self, new_status: &TaskStatus) -> bool {
+        match (&self.status, new_status) {
+            (TaskStatus::Pending, TaskStatus::InProgress) => true,
+            (TaskStatus::Pending, TaskStatus::Cancelled) => true,
+            (TaskStatus::InProgress, TaskStatus::Completed) => true,
+            (TaskStatus::InProgress, TaskStatus::Cancelled) => true,
+            (TaskStatus::Cancelled, TaskStatus::Pending) => true,
+            (old, new) if old == new => true,
+            _ => false,
+        }
+    }
+}

@@ -11,6 +11,12 @@ pub const REP: Symbol = symbol_short!("REP");
 /// Storage key prefix for user accounts
 pub const USER: Symbol = symbol_short!("USER");
 
+/// Storage key prefix for task records
+pub const TASK: Symbol = symbol_short!("TASK");
+
+/// Storage key for task counter
+pub const TASK_COUNTER: Symbol = symbol_short!("TASK_CNT");
+
 /// Dispute time-to-live in seconds (48 hours)
 pub const DISPUTE_TTL: u64 = 172_800;
 
@@ -19,6 +25,12 @@ pub const MAX_NAME_LENGTH: u32 = 100;
 
 /// Maximum length for avatar URL
 pub const MAX_AVATAR_LENGTH: u32 = 500;
+
+/// Maximum length for task title
+pub const MAX_TITLE_LENGTH: u32 = 200;
+
+/// Maximum length for task description
+pub const MAX_DESCRIPTION_LENGTH: u32 = 2000;
 
 /// Event symbols for contract events
 pub mod events {
@@ -32,6 +44,10 @@ pub mod events {
     
     pub const USER_REGISTERED: (Symbol, Symbol) = (symbol_short!("reg"), symbol_short!("user"));
     pub const USER_UPDATED: (Symbol, Symbol) = (symbol_short!("updated"), symbol_short!("user"));
+    
+    pub const TASK_CREATED: (Symbol, Symbol) = (symbol_short!("created"), symbol_short!("task"));
+    pub const TASK_UPDATED: (Symbol, Symbol) = (symbol_short!("updated"), symbol_short!("task"));
+    pub const TASK_STATUS_CHANGED: (Symbol, Symbol) = (symbol_short!("status"), symbol_short!("task"));
 }
 
 /// Error messages for contract validation
@@ -50,4 +66,10 @@ pub mod errors {
     pub const NAME_TOO_LONG: &str = "name exceeds maximum length";
     pub const AVATAR_TOO_LONG: &str = "avatar URL exceeds maximum length";
     pub const UNAUTHORIZED_UPDATE: &str = "only user can update their own profile";
+    
+    pub const TASK_NOT_FOUND: &str = "task not found";
+    pub const TASK_TITLE_TOO_LONG: &str = "task title exceeds maximum length";
+    pub const TASK_DESCRIPTION_TOO_LONG: &str = "task description exceeds maximum length";
+    pub const INVALID_STATUS_TRANSITION: &str = "invalid status transition";
+    pub const UNAUTHORIZED_TASK_UPDATE: &str = "only task creator can update task";
 }

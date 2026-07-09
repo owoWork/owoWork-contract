@@ -47,6 +47,13 @@ pub struct JobEscrow;
 /// Contract implementation with all public functions
 ///
 /// # Functions
+/// - Task Management:
+///   - `create_task`: Create a new work item/task
+///   - `get_task`: Retrieve task information by ID
+///   - `update_task`: Update task title and description
+///   - `change_task_status`: Change task status with validation
+///   - `get_tasks`: Get multiple tasks (for testing/querying)
+///
 /// - User Management:
 ///   - `register_user`: Register a new user account
 ///   - `get_user`: Retrieve user profile information
@@ -233,6 +240,169 @@ impl JobEscrow {
             (symbol_short!("updated"), symbol_short!("user")),
             address,
         );
+    }
+
+    /// Creates a new task (work item)
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `creator`: User creating the task
+    /// - `title`: Task title
+    /// - `description`: Task description
+    ///
+    /// # Returns
+    /// - Task ID (auto-incremented)
+    ///
+    /// # Panics
+    /// - If title or description exceed maximum length
+    ///
+    /// # Authentication
+    /// - Requires creator authentication
+    pub fn create_task(env: Env, creator: Address, title: String, description: String) -> u64 {
+        creator.require_auth();
+
+        let task_storage = TaskStorage::new(&env);
+
+        // Validate input parameters
+        task_storage.validate_input(&title, &description)
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        // Get next auto-incremented task ID
+        let task_id = task_storage.next_id();
+
+        // Create task record
+        let task = Task::new(
+            task_id,
+            creator.clone(),
+            title,
+            description,
+            env.ledger().timestamp(),
+        );
+
+        // Save task
+        task_storage.save(&task);
+
+        // Emit creation event
+        env.events().publish(
+            (constants::events::TASK_CREATED.0, constants::events::TASK_CREATED.1),
+            (task_id, creator),
+        );
+
+        task_id
+    }
+
+    /// Retrieves task information by ID
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `task_id`: Task identifier
+    ///
+    /// # Returns
+    /// - Task information
+    ///
+    /// # Panics
+    /// - If task not found
+    pub fn get_task(env: Env, task_id: u64) -> Task {
+        let task_storage = TaskStorage::new(&env);
+        task_storage.get_expect(task_id)
+    }
+
+    /// Updates task title and description
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `task_id`: Task identifier
+    /// - `creator`: Task creator (must match original creator)
+    /// - `title`: New task title (optional)
+    /// - `description`: New task description (optional)
+    ///
+    /// # Panics
+    /// - If task not found
+    /// - If title or description exceed maximum length
+    /// - If caller is not the task creator
+    ///
+    /// # Authentication
+    /// - Requires creator authentication
+    pub fn update_task(env: Env, task_id: u64, creator: Address, title: Option<String>, description: Option<String>) {
+        creator.require_auth();
+
+        let task_storage = TaskStorage::new(&env);
+        let mut task = task_storage.get_expect(task_id);
+
+        // Validate caller is the task creator
+        assert!(task.creator == creator, "{}", constants::errors::UNAUTHORIZED_TASK_UPDATE);
+
+        // Validate input parameters if provided
+        let validate_title = title.as_ref().unwrap_or(&task.title);
+        let validate_description = description.as_ref().unwrap_or(&task.description);
+        
+        task_storage.validate_input(validate_title, validate_description)
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        // Update task information
+        task.update_info(title, description, env.ledger().timestamp());
+        task_storage.save(&task);
+
+        // Emit update event
+        env.events().publish(
+            (constants::events::TASK_UPDATED.0, constants::events::TASK_UPDATED.1),
+            (task_id, creator),
+        );
+    }
+
+    /// Changes task status with validation
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `task_id`: Task identifier
+    /// - `creator`: Task creator (must match original creator)
+    /// - `new_status`: New task status
+    ///
+    /// # Panics
+    /// - If task not found
+    /// - If status transition is invalid
+    /// - If caller is not the task creator
+    ///
+    /// # Authentication
+    /// - Requires creator authentication
+    pub fn change_task_status(env: Env, task_id: u64, creator: Address, new_status: TaskStatus) {
+        creator.require_auth();
+
+        let task_storage = TaskStorage::new(&env);
+        let mut task = task_storage.get_expect(task_id);
+
+        // Validate caller is the task creator
+        assert!(task.creator == creator, "{}", constants::errors::UNAUTHORIZED_TASK_UPDATE);
+
+        // Change task status with validation
+        task.change_status(new_status.clone(), env.ledger().timestamp())
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        // Save updated task
+        task_storage.save(&task);
+
+        // Emit status change event
+        env.events().publish(
+            (constants::events::TASK_STATUS_CHANGED.0, constants::events::TASK_STATUS_CHANGED.1),
+            (task_id, creator, new_status),
+        );
+    }
+
+    /// Gets multiple tasks (for testing/querying)
+    ///
+    /// # Arguments
+    /// - `env`: Contract environment
+    /// - `limit`: Maximum number of tasks to return (optional, default: 100)
+    ///
+    /// # Returns
+    /// - Vector of tasks
+    ///
+    /// # Note
+    /// - This is a simplified implementation suitable for testing
+    /// - For production use, consider pagination or indexed queries
+    pub fn get_tasks(env: Env, limit: Option<u32>) -> soroban_sdk::Vec<Task> {
+        let task_storage = TaskStorage::new(&env);
+        task_storage.get_all(limit)
     }
 
     /// Creates a new job and stores escrow metadata

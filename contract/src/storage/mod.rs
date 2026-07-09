@@ -2,8 +2,8 @@
 
 use soroban_sdk::{Env, Address, String};
 
-use crate::constants::{JOB, REP, USER, MAX_NAME_LENGTH, MAX_AVATAR_LENGTH};
-use crate::state::{Job, Reputation, User};
+use crate::constants::{JOB, REP, USER, TASK, TASK_COUNTER, MAX_NAME_LENGTH, MAX_AVATAR_LENGTH, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH};
+use crate::state::{Job, Reputation, User, Task};
 
 /// Job storage helper
 pub struct JobStorage<'a> {
@@ -128,5 +128,83 @@ impl<'a> UserStorage<'a> {
         }
         
         Ok(())
+    }
+}
+
+/// Task storage helper
+pub struct TaskStorage<'a> {
+    env: &'a Env,
+}
+
+impl<'a> TaskStorage<'a> {
+    /// Creates a new TaskStorage instance
+    pub fn new(env: &'a Env) -> Self {
+        TaskStorage { env }
+    }
+
+    /// Gets the next task ID (auto-incremented)
+    pub fn next_id(&self) -> u64 {
+        let current_id: u64 = self.env.storage().persistent().get(&TASK_COUNTER).unwrap_or(0);
+        let next_id = current_id + 1;
+        self.env.storage().persistent().set(&TASK_COUNTER, &next_id);
+        next_id
+    }
+
+    /// Gets a task by ID
+    pub fn get(&self, task_id: u64) -> Option<Task> {
+        let key = (TASK.clone(), task_id);
+        self.env.storage().persistent().get(&key)
+    }
+
+    /// Gets a task by ID, panics if not found
+    pub fn get_expect(&self, task_id: u64) -> Task {
+        self.get(task_id).expect("task not found")
+    }
+
+    /// Checks if a task exists
+    pub fn exists(&self, task_id: u64) -> bool {
+        let key = (TASK.clone(), task_id);
+        self.env.storage().persistent().has(&key)
+    }
+
+    /// Saves a task
+    pub fn save(&self, task: &Task) {
+        let key = (TASK.clone(), task.id);
+        self.env.storage().persistent().set(&key, task);
+    }
+
+    /// Deletes a task (for cleanup if needed)
+    pub fn delete(&self, task_id: u64) {
+        let key = (TASK.clone(), task_id);
+        self.env.storage().persistent().remove(&key);
+    }
+
+    /// Validates task input parameters
+    pub fn validate_input(&self, title: &String, description: &String) -> Result<(), &'static str> {
+        if title.len() > MAX_TITLE_LENGTH {
+            return Err("task title exceeds maximum length");
+        }
+        
+        if description.len() > MAX_DESCRIPTION_LENGTH {
+            return Err("task description exceeds maximum length");
+        }
+        
+        Ok(())
+    }
+
+    /// Gets all tasks (for testing/querying - use with caution in production)
+    pub fn get_all(&self, limit: Option<u32>) -> soroban_sdk::Vec<Task> {
+        let mut tasks = soroban_sdk::Vec::new(self.env);
+        let max_limit = limit.unwrap_or(100);
+        
+        // This is a simplified implementation - in production you might want
+        // a different approach for enumerating all tasks
+        for i in 1..=max_limit {
+            if let Some(task) = self.get(i as u64) {
+                tasks.push_back(task);
+            }
+        }
+        
+        tasks
     }
 }
